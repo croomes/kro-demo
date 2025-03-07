@@ -1,0 +1,6 @@
+apiVersion: kro.run/v1alpha1
+kind: CSIBlob
+metadata:
+  name: csi-blob
+spec:
+  name: blob-csi-driver

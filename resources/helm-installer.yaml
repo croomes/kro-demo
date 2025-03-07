@@ -1,0 +1,33 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: helm
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: HelmInstaller
+    spec:
+      name: string
+      namespace: string | default=default
+    status:
+      deploymentConditions: ${helmOperator.status.conditions}
+
+  resources:
+  - id: sourceOperator
+    template:
+      apiVersion: kro.run/v1alpha1
+      kind: SourceOperator
+      metadata:
+        name: source-operator
+        namespace: ${schema.spec.namespace}
+      spec:
+        name: source-operator
+  - id: helmOperator
+    template:
+      apiVersion: kro.run/v1alpha1
+      kind: HelmOperator
+      metadata:
+        name: helm-operator
+        namespace: ${schema.spec.namespace}
+      spec:
+        name: helm-operator

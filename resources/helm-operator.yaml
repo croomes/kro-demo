@@ -1,0 +1,208 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: helm-operator
+spec:
+  # kro uses this simple schema to create your CRD schema and apply it
+  # The schema defines what users can provide when they instantiate the RGD (create an instance).
+  schema:
+    apiVersion: v1alpha1
+    kind: HelmOperator
+    spec:
+      # Spec fields that users can provide.
+      name: string
+      namespace: string | default=default
+      image: string | default="mcr.microsoft.com/oss/v2/fluxcd/helm-controller:v1.2.0"
+    status:
+      # Fields the controller will inject into instances status.
+      deploymentConditions: ${deployment.status.conditions}
+
+  # Define the resources this API will manage.
+  resources:
+    - id: clusterrole
+      template:
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: ${schema.spec.name}
+        rules:
+        - apiGroups:
+            - ""
+          resources:
+            - configmaps
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+            - ""
+          resources:
+            - configmaps/status
+          verbs:
+            - get
+            - update
+            - patch
+        - apiGroups:
+            - ""
+          resources:
+            - events
+          verbs:
+            - create
+        - apiGroups:
+            - "coordination.k8s.io"
+          resources:
+            - leases
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - helm.toolkit.fluxcd.io
+          resources:
+          - helmreleases
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - helm.toolkit.fluxcd.io
+          resources:
+          - helmreleases/finalizers
+          verbs:
+          - create
+          - delete
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - helm.toolkit.fluxcd.io
+          resources:
+          - helmreleases/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - source.toolkit.fluxcd.io
+          resources:
+          - helmcharts
+          - ocirepositories
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - source.toolkit.fluxcd.io
+          resources:
+          - helmcharts/status
+          - ocirepositories/status
+          verbs:
+          - get
+
+    - id: crb
+      template:
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: ${schema.spec.name}
+        subjects:
+        - kind: ServiceAccount
+          name: default
+          namespace: ${schema.spec.namespace}
+        roleRef:
+          kind: ClusterRole
+          name: ${schema.spec.name}
+          apiGroup: rbac.authorization.k8s.io
+
+    - id: deployment
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name} # Use the name provided by user
+          labels:
+            app: ${schema.spec.name}
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "8080"
+        spec:
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+            spec:
+              terminationGracePeriodSeconds: 600
+              containers:
+              - name: manager
+                image: ${schema.spec.image} # Use the image provided by user
+                imagePullPolicy: IfNotPresent
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  runAsNonRoot: true
+                  capabilities:
+                    drop: [ "ALL" ]
+                  seccompProfile:
+                    type: RuntimeDefault
+                ports:
+                  - containerPort: 8080
+                    name: http-prom
+                    protocol: TCP
+                  - containerPort: 9440
+                    name: healthz
+                    protocol: TCP
+                env:
+                  - name: RUNTIME_NAMESPACE
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.namespace
+                  - name: TUF_ROOT # store the Fulcio root CA file in tmp
+                    value: "/tmp/.sigstore"
+                args:
+                  - --watch-all-namespaces
+                  - --log-level=info
+                  - --log-encoding=json
+                  - --enable-leader-election
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: healthz
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: healthz
+                resources:
+                  limits:
+                    cpu: 1000m
+                    memory: 1Gi
+                  requests:
+                    cpu: 100m
+                    memory: 64Mi
+                volumeMounts:
+                  - name: tmp
+                    mountPath: /tmp
+              volumes:
+                - name: tmp
+                  emptyDir: {}

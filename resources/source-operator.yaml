@@ -1,0 +1,235 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: source-operator
+spec:
+  # kro uses this simple schema to create your CRD schema and apply it
+  # The schema defines what users can provide when they instantiate the RGD (create an instance).
+  schema:
+    apiVersion: v1alpha1
+    kind: SourceOperator
+    spec:
+      # Spec fields that users can provide.
+      name: string
+      namespace: string | default=default
+      image: string | default="mcr.microsoft.com/oss/v2/fluxcd/source-controller:v1.5.0"
+    status:
+      # Fields the controller will inject into instances status.
+      deploymentConditions: ${deployment.status.conditions}
+
+  # Define the resources this API will manage.
+  resources:
+    - id: clusterrole
+      template:
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: ${schema.spec.name}
+        rules:
+        - apiGroups:
+            - ""
+          resources:
+            - configmaps
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+            - ""
+          resources:
+            - configmaps/status
+          verbs:
+            - get
+            - update
+            - patch
+        - apiGroups:
+            - ""
+          resources:
+            - events
+          verbs:
+            - create
+        - apiGroups:
+            - "coordination.k8s.io"
+          resources:
+            - leases
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - source.toolkit.fluxcd.io
+          resources:
+          - buckets
+          - gitrepositories
+          - helmcharts
+          - helmrepositories
+          - ocirepositories
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - source.toolkit.fluxcd.io
+          resources:
+          - buckets/finalizers
+          - gitrepositories/finalizers
+          - helmcharts/finalizers
+          - helmrepositories/finalizers
+          - ocirepositories/finalizers
+          verbs:
+          - create
+          - delete
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - source.toolkit.fluxcd.io
+          resources:
+          - buckets/status
+          - gitrepositories/status
+          - helmcharts/status
+          - helmrepositories/status
+          - ocirepositories/status
+          verbs:
+          - get
+          - patch
+          - update
+
+    - id: crb
+      template:
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: ${schema.spec.name}
+        subjects:
+        - kind: ServiceAccount
+          name: default
+          namespace: ${schema.spec.namespace}
+        roleRef:
+          kind: ClusterRole
+          name: ${schema.spec.name}
+          apiGroup: rbac.authorization.k8s.io
+
+    - id: deployment
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name} # Use the name provided by user
+          labels:
+            app: ${schema.spec.name}
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "8080"
+        spec:
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+            spec:
+              terminationGracePeriodSeconds: 10
+              containers:
+              - name: manager
+                image: ${schema.spec.image} # Use the image provided by user
+                imagePullPolicy: IfNotPresent
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  runAsNonRoot: true
+                  capabilities:
+                    drop: [ "ALL" ]
+                  seccompProfile:
+                    type: RuntimeDefault
+                ports:
+                  - containerPort: 9090
+                    name: http
+                    protocol: TCP
+                  - containerPort: 8080
+                    name: http-prom
+                    protocol: TCP
+                  - containerPort: 9440
+                    name: healthz
+                    protocol: TCP
+                env:
+                  - name: RUNTIME_NAMESPACE
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.namespace
+                  - name: TUF_ROOT # store the Fulcio root CA file in tmp
+                    value: "/tmp/.sigstore"
+                args:
+                  - --watch-all-namespaces
+                  - --log-level=info
+                  - --log-encoding=json
+                  - --enable-leader-election
+                  - --storage-path=/data
+                  - --storage-adv-addr=source-controller.$(RUNTIME_NAMESPACE).svc.cluster.local.
+                livenessProbe:
+                  httpGet:
+                    port: healthz
+                    path: /healthz
+                readinessProbe:
+                  httpGet:
+                    port: http
+                    path: /
+                resources:
+                  limits:
+                    cpu: 1000m
+                    memory: 1Gi
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                volumeMounts:
+                  - name: data
+                    mountPath: /data
+                  - name: tmp
+                    mountPath: /tmp
+              volumes:
+                - name: data
+                  emptyDir: {}
+                - name: tmp
+                  emptyDir: {}
+
+    - id: service
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.name}
+        spec:
+          selector: ${deployment.spec.selector.matchLabels} # Use the deployment selector
+          ports:
+            - name: http
+              protocol: TCP
+              port: 80
+              targetPort: http
