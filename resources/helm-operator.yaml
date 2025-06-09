@@ -126,12 +126,22 @@ spec:
           name: ${schema.spec.name}
         subjects:
         - kind: ServiceAccount
-          name: default
+          name: ${schema.spec.name}
           namespace: ${schema.spec.namespace}
         roleRef:
           kind: ClusterRole
           name: ${schema.spec.name}
           apiGroup: rbac.authorization.k8s.io
+
+    - id: serviceaccount
+      template:
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: ${schema.spec.name}
+          namespace: ${schema.spec.namespace}
+          labels:
+            app: ${schema.spec.name}
 
     - id: deployment
       template:
@@ -153,6 +163,7 @@ spec:
               labels:
                 app: ${schema.spec.name}
             spec:
+              serviceAccountName: ${schema.spec.name}
               terminationGracePeriodSeconds: 600
               containers:
               - name: manager
@@ -195,7 +206,7 @@ spec:
                     port: healthz
                 resources:
                   limits:
-                    cpu: 1000m
+                    cpu: "1"
                     memory: 1Gi
                   requests:
                     cpu: 100m

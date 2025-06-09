@@ -10,7 +10,8 @@ spec:
       name: string
       namespace: string | default=default
     status:
-      deploymentConditions: ${helmOperator.status.conditions}
+      sourceDeploymentConditions: ${sourceOperator.status.conditions}
+      helmDeploymentConditions: ${helmOperator.status.conditions}
 
   resources:
   - id: sourceOperator

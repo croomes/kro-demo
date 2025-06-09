@@ -1,0 +1,42 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: postgres
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: Postgres
+    spec:
+      name: string
+      namespace: string | default=default
+    status:
+      deploymentConditions: ${repo.status.conditions}
+
+  resources:
+  - id: repo
+    template:
+      apiVersion: source.toolkit.fluxcd.io/v1
+      kind: HelmRepository
+      metadata:
+        name: ${schema.spec.name}
+        namespace: ${schema.spec.namespace}
+      spec:
+        interval: 1m0s
+        url: https://cloudnative-pg.github.io/charts
+
+  - id: release
+    template:
+      apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      metadata:
+        name: ${schema.spec.name}
+        namespace: ${schema.spec.namespace}
+      spec:
+        interval: 5m
+        chart:
+          spec:
+            chart: cloudnative-pg
+            version: '>=0.24.0'
+            sourceRef:
+              kind: HelmRepository
+              name: ${schema.spec.name}

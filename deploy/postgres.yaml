@@ -1,0 +1,6 @@
+apiVersion: kro.run/v1alpha1
+kind: Postgres
+metadata:
+  name: db1
+spec:
+  name: db1

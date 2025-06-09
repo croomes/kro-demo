@@ -130,12 +130,22 @@ spec:
           name: ${schema.spec.name}
         subjects:
         - kind: ServiceAccount
-          name: default
+          name: ${schema.spec.name}
           namespace: ${schema.spec.namespace}
         roleRef:
           kind: ClusterRole
           name: ${schema.spec.name}
           apiGroup: rbac.authorization.k8s.io
+
+    - id: serviceaccount
+      template:
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: ${schema.spec.name}
+          namespace: ${schema.spec.namespace}
+          labels:
+            app: ${schema.spec.name}
 
     - id: deployment
       template:
@@ -157,6 +167,7 @@ spec:
               labels:
                 app: ${schema.spec.name}
             spec:
+              serviceAccountName: ${schema.spec.name}
               terminationGracePeriodSeconds: 10
               containers:
               - name: manager
@@ -193,7 +204,7 @@ spec:
                   - --log-encoding=json
                   - --enable-leader-election
                   - --storage-path=/data
-                  - --storage-adv-addr=source-controller.$(RUNTIME_NAMESPACE).svc.cluster.local.
+                  - --storage-adv-addr=source-controller.$(RUNTIME_NAMESPACE).svc
                 livenessProbe:
                   httpGet:
                     port: healthz
@@ -204,7 +215,7 @@ spec:
                     path: /
                 resources:
                   limits:
-                    cpu: 1000m
+                    cpu: "1"
                     memory: 1Gi
                   requests:
                     cpu: 50m
@@ -227,7 +238,8 @@ spec:
         metadata:
           name: ${schema.spec.name}
         spec:
-          selector: ${deployment.spec.selector.matchLabels} # Use the deployment selector
+          selector:
+            app: ${schema.spec.name}
           ports:
             - name: http
               protocol: TCP
