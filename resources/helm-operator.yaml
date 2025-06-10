@@ -26,10 +26,15 @@ spec:
         metadata:
           name: ${schema.spec.name}
         rules:
+        # Since the installer needs to check & create any type of resource a
+        # Helm chart may create, it needs to run with cluster-admin permissions.
+        #
+        # This list can only be restricted by understanding what each supported
+        # chart needs and allowing only those permissions.
         - apiGroups:
-            - ""
+            - "*"
           resources:
-            - configmaps
+            - "*"
           verbs:
             - get
             - list
@@ -38,85 +43,6 @@ spec:
             - update
             - patch
             - delete
-        - apiGroups:
-            - ""
-          resources:
-            - configmaps/status
-          verbs:
-            - get
-            - update
-            - patch
-        - apiGroups:
-            - ""
-          resources:
-            - events
-          verbs:
-            - create
-        - apiGroups:
-            - "coordination.k8s.io"
-          resources:
-            - leases
-          verbs:
-            - get
-            - list
-            - watch
-            - create
-            - update
-            - patch
-            - delete
-        - apiGroups:
-          - ""
-          resources:
-          - events
-          verbs:
-          - create
-          - patch
-        - apiGroups:
-          - helm.toolkit.fluxcd.io
-          resources:
-          - helmreleases
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - helm.toolkit.fluxcd.io
-          resources:
-          - helmreleases/finalizers
-          verbs:
-          - create
-          - delete
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - helm.toolkit.fluxcd.io
-          resources:
-          - helmreleases/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - source.toolkit.fluxcd.io
-          resources:
-          - helmcharts
-          - ocirepositories
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - source.toolkit.fluxcd.io
-          resources:
-          - helmcharts/status
-          - ocirepositories/status
-          verbs:
-          - get
 
     - id: crb
       template:

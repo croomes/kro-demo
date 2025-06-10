@@ -6,8 +6,8 @@
 
 ## Install
 
-Running `make install` will install the kro Helm chart, CRD dependencies, and
-the demo Resource Graph Definitions (RGDs).
+Running `make install` will install the kro Helm chart, CRD dependencies,
+the demo Resource Graph Definitions (RGDs) and the Helm installer.
 
 ## Upgrading
 
@@ -20,12 +20,18 @@ The kro version is hardcoded in the Makefile. To get the latest release, run:
 
 Update `KRO_VERSION` in the Makefile, and run `make upgrade`.
 
-## Create HelmInstaller instance
+## Install Postgres
 
-This installs the Helm installer.
+This installs Postgres.
 
 ```console
-make deploy-helm
+make deploy-postgres
+```
+
+Or, to install manually, customize `deploy/postgres.yaml` and apply:
+
+```console
+kubectl apply -f deploy/postgres.yaml`
 ```
 
 ## Uninstall
